@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "RSVP Nano",
+    "slug": "RSVPNanoMobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "bundleIdentifier": "com.rsvpnanomobile.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSDocumentsFolderUsageDescription": "RSVP Nano needs access to import your EPUB and text files for reading."
+      }
+    },
+    "android": {
+      "package": "com.rsvpnanomobile.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0f"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/AtkinsonHyperlegible-Regular.ttf",
+            "./assets/fonts/AtkinsonHyperlegible-Bold.ttf",
+            "./assets/fonts/OpenDyslexic-Regular.otf",
+            "./assets/fonts/OpenDyslexic-Bold.otf"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1ffbafb1-0db4-4885-9c1e-48ea664cd233"
+      }
+    }
+  }
+}
