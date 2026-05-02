@@ -461,15 +461,8 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
     .onUpdate((e) => {
       runOnJS(handleCancelTouchRef.current)();
 
-      // Only handle vertical movement for speed
-      if (Math.abs(e.translationY) > Math.abs(e.translationX)) {
-        const delta = -e.translationY - accumulatedWpmDelta.current;
-        if (Math.abs(delta) >= 3) {
-          const steps = Math.trunc(delta / 3);
-          runOnJS(adjustWpmRef.current)(steps * 10); // Still adjust in increments of 10 WPM
-          accumulatedWpmDelta.current += steps * 3;
-        }
-      }
+      // Speed scrubbing removed in favor of slider
+
       // Horizontal movement is explicitly ignored
     })
     .onFinalize(() => {
@@ -573,7 +566,21 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
           </Text>
         </View>
       </View>
-      {/* â”€â”€ TOC Drawer Overlay â”€â”€ */}
+
+      {/* Speed Slider Component */}
+      <View style={[styles.sliderOverlay, { bottom: Math.max(insets.bottom + 100, 120) }]}>
+        <SpeedSlider 
+          value={wpmDisplay} 
+          onValueChange={(val: number) => {
+            engine.setWpm(val);
+            setWpmDisplay(val);
+            playClickSoundRef.current();
+          }}
+          colors={colors}
+        />
+      </View>
+
+      {/* ——— TOC Drawer Overlay ——— */}
       {isTocOpen && (
         <View style={[StyleSheet.absoluteFill, { zIndex: 1000, flexDirection: 'row' }]}>
           {/* Panel */}
@@ -624,7 +631,77 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————— Helpers —————————————————
+
+const SpeedSlider = ({ value, onValueChange, colors }: any) => {
+  const isActive = useSharedValue(0);
+  const startWpm = useSharedValue(value);
+  const SLIDER_WIDTH = 48;
+  const SLIDER_HEIGHT = 260;
+  const SQUARE_SIZE = 48;
+  const MIN_WPM = 50;
+  const MAX_WPM = 1000;
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isActive.value ? 1 : 0.85, { duration: 300 }),
+    width: withSpring(isActive.value ? SLIDER_WIDTH : SQUARE_SIZE),
+    height: withSpring(isActive.value ? SLIDER_HEIGHT : SQUARE_SIZE),
+    borderRadius: withSpring(isActive.value ? 24 : 12),
+    transform: [{ scale: withSpring(isActive.value ? 1.05 : 1) }],
+  }));
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isActive.value ? 1 : 0),
+  }));
+
+  const iconStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isActive.value ? 0 : 1),
+    position: 'absolute',
+  }));
+
+  const gesture = Gesture.Pan()
+    .onBegin(() => {
+      isActive.value = 1;
+      startWpm.value = value;
+    })
+    .onUpdate((e) => {
+      const deltaY = -e.translationY;
+      const range = MAX_WPM - MIN_WPM;
+      const wpmPerPixel = range / (SLIDER_HEIGHT - 60);
+      const newWpm = Math.round((startWpm.value + deltaY * wpmPerPixel) / 10) * 10;
+      const clamped = Math.max(MIN_WPM, Math.min(MAX_WPM, newWpm));
+      if (clamped !== value) {
+        runOnJS(onValueChange)(clamped);
+      }
+    })
+    .onFinalize(() => {
+      isActive.value = 0;
+    });
+
+  const progress = (value - MIN_WPM) / (MAX_WPM - MIN_WPM);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[styles.speedSliderContainer, animatedStyle, { backgroundColor: colors.surfaceElevated }]}>
+        {/* Square Icon State */}
+        <Animated.View style={[iconStyle, styles.speedSliderIconBox]}>
+          <Text style={[styles.speedSliderIconText, { color: colors.accent }]}>WPM</Text>
+        </Animated.View>
+
+        {/* Expanded Slider State */}
+        <Animated.View style={[contentStyle, styles.speedSliderContent]}>
+          <Text style={[styles.speedSliderValue, { color: colors.textPrimary }]}>{value}</Text>
+          <View style={[styles.speedSliderTrack, { backgroundColor: colors.border }]}>
+            <View style={[styles.speedSliderFill, { height: `${progress * 100}%`, backgroundColor: colors.accent }]}>
+              <View style={[styles.speedSliderKnob, { backgroundColor: colors.textPrimary }]} />
+            </View>
+          </View>
+          <Text style={[styles.speedSliderLabel, { color: colors.textSecondary }]}>SPEED</Text>
+        </Animated.View>
+      </Animated.View>
+    </GestureDetector>
+  );
+};
 
 function findCurrentChapter(chapters: ChapterMarker[], wordIndex: number): ChapterMarker | null {
   let current: ChapterMarker | null = null;
@@ -644,14 +721,14 @@ const InlineWord = ({ text, isActive, colors, fontSize, fontFamily }: any) => {
   if (!isActive) {
     return (
       <Text style={{ 
-        color: colors.phantomText, 
+        color: '#1a1a1f', // Darker blackish tone
         fontSize, 
         fontFamily: fontFamily.regular, 
         lineHeight: fontSize * 1.5, 
-        opacity: 0.15,
-        textShadowColor: colors.phantomText,
+        opacity: 0.8, // Increased opacity since color is now darker
+        textShadowColor: '#000',
         textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 2,
+        textShadowRadius: 6, // Increased blur
       }}>
         <Text>{before}</Text>
         <Text>{focus}</Text>
@@ -687,11 +764,11 @@ const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, s
                         <Text style={{ 
                             fontSize, 
                             lineHeight: fontSize * 1.5, 
-                            color: colors.phantomText, 
-                            opacity: 0.15,
-                            textShadowColor: colors.phantomText,
+                            color: '#1a1a1f', 
+                            opacity: 0.8,
+                            textShadowColor: '#000',
                             textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 2,
+                            textShadowRadius: 6,
                         }}>{' '}</Text>
                     </Text>
                 </View>
@@ -711,7 +788,7 @@ const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, s
     return prev.startIndex === next.startIndex && prev.endIndex === next.endIndex;
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————— Styles —————————————————
 
 const styles = StyleSheet.create({
   container: {
@@ -764,7 +841,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // â”€â”€ Reader â”€â”€
+  // ——— Reader ———
   readerArea: {
     flex: 1,
     overflow: 'hidden',
@@ -827,7 +904,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  // â”€â”€ Footer â”€â”€
+  // ——— Footer ———
   footer: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -912,6 +989,82 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+
+  // Speed Slider
+  sliderOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  speedSliderContainer: {
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedSliderIconBox: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedSliderIconText: {
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  speedSliderContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+    width: '100%',
+  },
+  speedSliderLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1,
+    transform: [{ rotate: '-90deg' }], // Rotate label for vertical
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  speedSliderTrack: {
+    width: 2, // Even narrower
+    flex: 1,
+    borderRadius: 1,
+    justifyContent: 'flex-end', // Fill from bottom
+  },
+  speedSliderFill: {
+    width: '100%',
+    borderRadius: 2,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  speedSliderKnob: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginTop: -7,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  speedSliderValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
 // End of file
