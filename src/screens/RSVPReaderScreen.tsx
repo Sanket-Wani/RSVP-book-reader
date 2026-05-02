@@ -40,6 +40,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { RSVPController, focusLetterIndex } from '../engine/RSVPEngine';
@@ -167,11 +168,12 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
       // Add 0.5 to center on the middle of the pivot character itself, rather than its left edge
       const orpRatio = wordStr.length > 0 ? (focusIdx + 0.5) / wordStr.length : 0.5;
       
-      const canvasMargin = SCREEN_WIDTH * 0.05;
-      const wordWidth = wordL.w - (fontSize * 0.3); // subtract approximate space width
+      const canvasMargin = 20; // Matches style.left
+      const wordWidth = wordL.w - (fontSize * 0.3); // approximate word width without space
+      const focusOff = wordLayouts.current.get(wordIdx)?.focusX || (wordWidth * orpRatio);
       
-      // Center the word on the red pivot character
-      const orpX = canvasMargin + absX + (wordWidth * orpRatio);
+      // Center the word specifically on the measured red pivot character
+      const orpX = canvasMargin + absX + focusOff;
       const orpY = absY + (wordL.h / 2);
       
       const targetX = (SCREEN_WIDTH / 2) - orpX;
@@ -191,7 +193,17 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
   }, []);
 
   const saveWordLayout = useCallback((absIndex: number, x: number, y: number, w: number, h: number) => {
-    wordLayouts.current.set(absIndex, { x, y, w, h });
+    const existing = wordLayouts.current.get(absIndex) || {};
+    wordLayouts.current.set(absIndex, { ...existing, x, y, w, h });
+    if (absIndex === engine.currentIndex) {
+      updateCamera(engine.currentIndex, 0);
+    }
+  }, [engine.currentIndex, updateCamera]);
+
+  const saveFocusOffset = useCallback((absIndex: number, focusX: number, focusW: number) => {
+    const existing = wordLayouts.current.get(absIndex) || {};
+    // Store the center of the focus letter relative to the word's start
+    wordLayouts.current.set(absIndex, { ...existing, focusX: focusX + (focusW / 2) });
     if (absIndex === engine.currentIndex) {
       updateCamera(engine.currentIndex, 0);
     }
@@ -495,10 +507,10 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Pressable onPress={onBack} hitSlop={16} style={styles.backButton}>
-            <Text style={[styles.headerButton, { color: colors.accent }]}>â† Back</Text>
+            <Ionicons name="arrow-back" size={24} color={colors.accent} />
           </Pressable>
           <Pressable onPress={() => setIsTocOpen(true)} hitSlop={16} style={{ marginLeft: 16 }}>
-            <Text style={[styles.headerButton, { color: colors.accent, fontSize: 18 }]}>â˜°</Text>
+            <Ionicons name="menu" size={28} color={colors.accent} />
           </Pressable>
         </View>
         <Text
@@ -535,6 +547,7 @@ export default function RSVPReaderScreen({ book, bookId, onBack }: Props) {
                   bookWords={book.words} 
                   saveWordLayout={saveWordLayout} 
                   saveParaLayout={saveParaLayout}
+                  saveFocusOffset={saveFocusOffset}
                   colors={colors}
                   fontSize={fontSize}
                   fontFamily={fontFamily}
@@ -712,7 +725,7 @@ function findCurrentChapter(chapters: ChapterMarker[], wordIndex: number): Chapt
   return current;
 }
 
-const InlineWord = ({ text, isActive, colors, fontSize, fontFamily }: any) => {
+const InlineWord = ({ text, isActive, colors, fontSize, fontFamily, onFocusLayout }: any) => {
   const focusIdx = focusLetterIndex(text);
   const before = text.slice(0, focusIdx);
   const focus = text[focusIdx] ?? '';
@@ -725,10 +738,10 @@ const InlineWord = ({ text, isActive, colors, fontSize, fontFamily }: any) => {
         fontSize, 
         fontFamily: fontFamily.regular, 
         lineHeight: fontSize * 1.5, 
-        opacity: 0.8, // Increased opacity since color is now darker
+        opacity: 0.25, // Even more subtle
         textShadowColor: '#000',
         textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 6, // Increased blur
+        textShadowRadius: 25, // Extreme blur
       }}>
         <Text>{before}</Text>
         <Text>{focus}</Text>
@@ -740,13 +753,18 @@ const InlineWord = ({ text, isActive, colors, fontSize, fontFamily }: any) => {
   return (
     <Text style={{ fontSize, fontFamily: fontFamily.regular, lineHeight: fontSize * 1.5 }}>
       <Text style={{ color: colors.textPrimary }}>{before}</Text>
-      <Text style={{ color: colors.focusRed ?? '#ff4500' }}>{focus}</Text>
+      <Text 
+        onLayout={onFocusLayout}
+        style={{ color: colors.focusRed ?? '#ff4500' }}
+      >
+        {focus}
+      </Text>
       <Text style={{ color: colors.textPrimary }}>{after}</Text>
     </Text>
   );
 };
 
-const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, saveWordLayout, saveParaLayout, colors, fontSize, fontFamily, activeIndex }: any) => {
+const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, saveWordLayout, saveParaLayout, saveFocusOffset, colors, fontSize, fontFamily, activeIndex }: any) => {
     const words = useMemo(() => {
         const arr = [];
         for (let i = startIndex; i < endIndex; i++) {
@@ -760,15 +778,22 @@ const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, s
             {words.map(w => (
                 <View key={w.absIndex} onLayout={e => saveWordLayout(w.absIndex, e.nativeEvent.layout.x, e.nativeEvent.layout.y, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}>
                     <Text>
-                        <InlineWord text={w.text} isActive={w.absIndex === activeIndex} colors={colors} fontSize={fontSize} fontFamily={fontFamily} />
+                        <InlineWord 
+                          text={w.text} 
+                          isActive={w.absIndex === activeIndex} 
+                          colors={colors} 
+                          fontSize={fontSize} 
+                          fontFamily={fontFamily} 
+                          onFocusLayout={w.absIndex === activeIndex ? (e: any) => saveFocusOffset(w.absIndex, e.nativeEvent.layout.x, e.nativeEvent.layout.width) : undefined}
+                        />
                         <Text style={{ 
                             fontSize, 
                             lineHeight: fontSize * 1.5, 
                             color: '#1a1a1f', 
-                            opacity: 0.8,
+                            opacity: 0.25,
                             textShadowColor: '#000',
                             textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 6,
+                            textShadowRadius: 25,
                         }}>{' '}</Text>
                     </Text>
                 </View>
@@ -849,8 +874,8 @@ const styles = StyleSheet.create({
   },
   canvas: {
     position: 'absolute',
-    width: SCREEN_WIDTH * 0.9,
-    left: SCREEN_WIDTH * 0.05,
+    width: SCREEN_WIDTH * 2, // 200% width for more words per line
+    left: 20,
     top: 0,
   },
   paragraphContainer: {

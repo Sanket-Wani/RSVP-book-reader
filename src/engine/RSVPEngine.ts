@@ -425,11 +425,28 @@ export function durationForWord(
  * Matches the firmware's approach: ~35% through the readable characters.
  */
 export function focusLetterIndex(word: string): number {
-  if (word.length <= 1) return 0;
-  // Odd  → exact centre:              "cat"(3)→1, "hello"(5)→2, "whatsoever."(11)→5
-  // Even → one left of centre (lhs<rhs): "read"(4)→1, "mother"(6)→2, "beauty"(6)→2
-  // Formula: Math.floor((length - 1) / 2)
-  return Math.floor((word.length - 1) / 2);
+  if (!word) return 0;
+  
+  // Collect indices of all letter/digit characters
+  const alphabetIndices: number[] = [];
+  for (let i = 0; i < word.length; i++) {
+    if (isWordChar(word[i])) {
+      alphabetIndices.push(i);
+    }
+  }
+
+  if (alphabetIndices.length === 0) {
+    // Fallback if no letters exist (e.g. "!!!")
+    return Math.floor((word.length - 1) / 2);
+  }
+
+  // Calculate the center index within the alphabet list
+  // Odd  (e.g. 3) -> floor((3-1)/2) = 1
+  // Even (e.g. 4) -> floor((4-1)/2) = 1
+  const alphabetCenterIdx = Math.floor((alphabetIndices.length - 1) / 2);
+  
+  // Return the original index in the word string
+  return alphabetIndices[alphabetCenterIdx];
 }
 
 // ──────────────────── Sentence Detection ────────────────────────────────────
