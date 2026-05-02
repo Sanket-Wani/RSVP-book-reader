@@ -643,7 +643,16 @@ const InlineWord = ({ text, isActive, colors, fontSize, fontFamily }: any) => {
 
   if (!isActive) {
     return (
-      <Text style={{ color: colors.phantomText, fontSize, fontFamily: fontFamily.regular, lineHeight: fontSize * 1.5, opacity: 0.35 }}>
+      <Text style={{ 
+        color: colors.phantomText, 
+        fontSize, 
+        fontFamily: fontFamily.regular, 
+        lineHeight: fontSize * 1.5, 
+        opacity: 0.15,
+        textShadowColor: colors.phantomText,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 2,
+      }}>
         <Text>{before}</Text>
         <Text>{focus}</Text>
         <Text>{after}</Text>
@@ -675,7 +684,15 @@ const ParagraphRenderer = React.memo(({ pIdx, startIndex, endIndex, bookWords, s
                 <View key={w.absIndex} onLayout={e => saveWordLayout(w.absIndex, e.nativeEvent.layout.x, e.nativeEvent.layout.y, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}>
                     <Text>
                         <InlineWord text={w.text} isActive={w.absIndex === activeIndex} colors={colors} fontSize={fontSize} fontFamily={fontFamily} />
-                        <Text style={{ fontSize, lineHeight: fontSize * 1.5, color: colors.phantomText, opacity: 0.35 }}>{' '}</Text>
+                        <Text style={{ 
+                            fontSize, 
+                            lineHeight: fontSize * 1.5, 
+                            color: colors.phantomText, 
+                            opacity: 0.15,
+                            textShadowColor: colors.phantomText,
+                            textShadowOffset: { width: 0, height: 0 },
+                            textShadowRadius: 2,
+                        }}>{' '}</Text>
                     </Text>
                 </View>
             ))}
